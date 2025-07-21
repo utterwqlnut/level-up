@@ -1,15 +1,127 @@
+use crossterm::event::KeyCode;
+
+use crate::Model;
+
 #[derive(PartialEq)]
 
+// Simple text input messages
 pub enum LowLevelMessage {
     Char(char),
     Push,
     Delete,
     Quit,
 }
-pub enum Messages {
-    Increment,
-    Decrement,
-    Quit,
+
+// Higher level command messages
+pub enum HighLevelMessage {
+    Add(Vec<String>),
+    Log(Vec<String>),
+    Remove(Vec<String>),
+    Complete(Vec<String>),
+    Graph(GraphSpecifier),
+    Analysis(AnalysisSpecifier),
 }
 
-// Implement parsing of commands
+// Specifiers for Graphing
+pub enum GraphSpecifier {
+    Bar(Vec<String>),
+    Line(Vec<String>),
+    Scatter(Vec<String>),
+}
+
+// Specifiers for Analysis
+pub enum AnalysisSpecifier {
+    PCA(Vec<String>),
+    // More to come
+}
+
+// Parsing Trait
+pub trait Parseable<T>: Sized {
+    fn parse(a: T) -> Option<Self>;
+}
+
+// Executable Trait
+
+pub trait Executable {
+    fn execute(&self, model: &mut Model);
+}
+
+// Implement parsing of text input commands
+impl Parseable<KeyCode> for LowLevelMessage {
+    fn parse(a: KeyCode) -> Option<Self> {
+        match a {
+            KeyCode::Char('q') => Some(LowLevelMessage::Quit),
+            KeyCode::Char(c) => Some(LowLevelMessage::Char(c)),
+            KeyCode::Backspace => Some(LowLevelMessage::Delete),
+            KeyCode::Enter => Some(LowLevelMessage::Push),
+            _ => None,
+        }
+    }
+}
+
+// Implement parsing of high-level commands
+impl Parseable<String> for HighLevelMessage {
+    fn parse(a: String) -> Option<Self> {
+        let parts: Vec<&str> = a.split_whitespace().collect();
+
+        if parts.len() < 2 {
+            return None;
+        }
+
+        match parts[0] {
+            "add" => Some(HighLevelMessage::Add(collect_args(&parts[1..]))),
+            "complete" => Some(HighLevelMessage::Complete(collect_args(&parts[1..]))),
+            "remove" => Some(HighLevelMessage::Remove(collect_args(&parts[1..]))),
+            _ => if parts.len() < 2 {None} else {
+                match parts[0] {
+                    "graph" => {
+                        match parts[1] {
+                            "bar" => Some(HighLevelMessage::Graph(
+                                GraphSpecifier::Bar(collect_args(&parts[2..]))
+                            )),
+                            "line" => Some(HighLevelMessage::Graph(
+                                GraphSpecifier::Line(collect_args(&parts[2..]))
+                            )),
+                            "scatter" => Some(HighLevelMessage::Graph(
+                                GraphSpecifier::Scatter(collect_args(&parts[2..]))
+                            )),
+                            _ => None,
+                        }
+                    },
+                    "analysis" => {
+                        match parts[1] {
+                            "pca" => Some(HighLevelMessage::Analysis(
+                                AnalysisSpecifier::PCA(collect_args(&parts[2..]))
+                            )),
+                            _ => None,
+                        }
+                    },
+                    _ => None,
+                }
+            }
+        }
+    }
+}
+
+
+// Helper method
+fn collect_args(stringy: &[&str]) -> Vec<String> {
+    stringy.iter().map(|s| s.to_string()).collect()
+}
+
+impl Executable for HighLevelMessage {
+    fn execute(&self, model: &mut Model) {
+        match self {
+            HighLevelMessage::Add(vars) => {
+                model.output.push_str(format!("{}{}",vars.join(" ").as_str(),"\n").as_str());
+            },
+            HighLevelMessage::Remove(vars) => {
+                model.output = model.output.replace(vars.join(" ").as_str(),"");
+            },
+            HighLevelMessage::Complete(vars) => {
+                model.output = model.output.replace(vars.join(" ").as_str(), format!("{} {}",vars.join(" ").as_str(),"✔").as_str());
+            }
+            _ => {},
+        };
+    }
+}

@@ -1,6 +1,8 @@
 use std::io;
 mod messages;
-use crate::messages::{LowLevelMessage, Messages};
+use crate::messages::{LowLevelMessage, HighLevelMessage};
+use crate::messages::Parseable;
+use crate::messages::Executable;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     buffer::Buffer, layout::{Alignment, Constraint, Direction, Layout, Rect}, style::Stylize, symbols::border, text::{Line, Text}, widgets::{Block, Paragraph, Widget}, DefaultTerminal, Frame
@@ -137,8 +139,11 @@ impl Model {
     }
     fn push_msg(&mut self) {
         // Replace with a high-level message processor
-        self.output.push_str(&self.input.clone());
-        self.output.push('\n');
+        let msg = HighLevelMessage::parse(self.input.clone());
+        match msg{
+            Some(true_msg) => true_msg.execute(self),
+            _ => {},
+        };
         self.input.clear();
     }
 }
