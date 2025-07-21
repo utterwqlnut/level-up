@@ -1,15 +1,9 @@
 use std::io;
 mod messages;
-use crate::messages::Messages;
+use crate::messages::{LowLevelMessage, Messages};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
-    DefaultTerminal, Frame,
-    buffer::Buffer,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::Stylize,
-    symbols::border,
-    text::{Line, Text},
-    widgets::{Block, Paragraph, Widget},
+    buffer::Buffer, layout::{Alignment, Constraint, Direction, Layout, Rect}, style::Stylize, symbols::border, text::{Line, Text}, widgets::{Block, Paragraph, Widget}, DefaultTerminal, Frame
 };
 
 fn main() -> io::Result<()> {
@@ -21,7 +15,8 @@ fn main() -> io::Result<()> {
 
 #[derive(Debug, Default)]
 pub struct Model {
-    counter: u8,
+    output: String,
+    input: String,
     exit: bool,
 }
 
@@ -38,6 +33,7 @@ impl Widget for &Model {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(first_split[0]);
 
+        // Create blocks for each section of ui
         let input_title = Line::from("User Input".bold());
         let input_block = Block::bordered()
             .title(input_title.centered())
@@ -48,6 +44,10 @@ impl Widget for &Model {
             width: first_split[1].width / 2,
             height: first_split[1].height,
         };
+        let copy = self.input.clone();
+        let input_text = Paragraph::new(copy)
+            .block(input_block)
+            .alignment(Alignment::Center);
 
         let dashboard_area = body_chunks[0];
         let dash_title = Line::from("Dashboard".bold());
@@ -55,14 +55,20 @@ impl Widget for &Model {
             .title(dash_title.centered())
             .border_set(border::THICK);
 
+        let copy = self.output.clone();
+        let dash_text = Paragraph::new(copy)
+            .block(dash_block)
+            .alignment(Alignment::Center);
+
         let chart_area = body_chunks[1];
         let chart_title = Line::from("Charts".bold());
         let chart_block = Block::bordered()
             .title(chart_title.centered())
             .border_set(border::THICK);
 
-        input_block.render(input_area, buf);
-        dash_block.render(dashboard_area, buf);
+        // Render blocks
+        input_text.render(input_area, buf);
+        dash_text.render(dashboard_area, buf);
         chart_block.render(chart_area, buf);
     }
 }
@@ -86,7 +92,7 @@ impl Model {
         frame.render_widget(self, frame.area());
     }
 
-    fn collect_msg(&mut self) -> io::Result<Option<Messages>> {
+    fn collect_msg(&mut self) -> io::Result<Option<LowLevelMessage>> {
         match event::read()? {
             // it's important to check that the event is a key press event as
             // crossterm also emits key release and repeat events on Windows.
@@ -97,34 +103,42 @@ impl Model {
         }
     }
 
-    fn handle_key_event(&mut self, key_event: KeyEvent) -> Option<Messages> {
+    fn handle_key_event(&mut self, key_event: KeyEvent) -> Option<LowLevelMessage> {
         match key_event.code {
-            KeyCode::Char('q') => Some(Messages::Quit),
-            KeyCode::Left => Some(Messages::Decrement),
-            KeyCode::Right => Some(Messages::Increment),
+            KeyCode::Char('q') => Some(LowLevelMessage::Quit),
+            KeyCode::Char(c) => Some(LowLevelMessage::Char(c)),
+            KeyCode::Backspace => Some(LowLevelMessage::Delete),
+            KeyCode::Enter => Some(LowLevelMessage::Push),
             _ => None,
         }
     }
 
     // Use different module functions and call setters
-    fn update(&mut self, msg: &Messages) {
+    fn update(&mut self, msg: &LowLevelMessage) {
         match msg {
-            Messages::Increment => self.increment_counter(),
-            Messages::Decrement => self.decrement_counter(),
-            Messages::Quit => self.exit(),
+            LowLevelMessage::Char(c) => self.add_char(*c),
+            LowLevelMessage::Delete => self.pop_char(),
+            LowLevelMessage::Quit => self.exit(),
+            LowLevelMessage::Push => self.push_msg(),
         }
     }
 
     // Replace with a bunch of setters for "Model" state variables
-    fn decrement_counter(&mut self) {
-        self.counter -= 1;
+    fn add_char(&mut self,c: char) {
+        self.input.push(c);
     }
 
-    fn increment_counter(&mut self) {
-        self.counter += 1;
+    fn pop_char(&mut self) {
+        self.input.pop();
     }
 
     fn exit(&mut self) {
         self.exit = true;
+    }
+    fn push_msg(&mut self) {
+        // Replace with a high-level message processor
+        self.output.push_str(&self.input.clone());
+        self.output.push('\n');
+        self.input.clear();
     }
 }
