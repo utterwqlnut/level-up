@@ -1,3 +1,5 @@
+use std::{error::Error, io};
+
 use crossterm::event::KeyCode;
 
 use crate::Model;
@@ -43,7 +45,7 @@ pub trait Parseable<T>: Sized {
 // Executable Trait
 
 pub trait Executable {
-    fn execute(&self, model: &mut Model);
+    fn execute(&self, model: &mut Model) -> Result<(),&str>;
 }
 
 // Implement parsing of text input commands
@@ -110,18 +112,43 @@ fn collect_args(stringy: &[&str]) -> Vec<String> {
 }
 
 impl Executable for HighLevelMessage {
-    fn execute(&self, model: &mut Model) {
+    fn execute(&self, model: &mut Model) -> Result<(), &str> {
         match self {
             HighLevelMessage::Add(vars) => {
-                model.output.push_str(format!("{}{}",vars.join(" ").as_str(),"\n").as_str());
+                let task = vars[..vars.len()-1].join(" ");
+                if let Some(points) = vars.last() {
+                    let points: u8 = points.trim().parse().map_err(|_| "Invalid use of add command")?;
+                    model.tasks.insert(task.clone(),(points,false));
+                    Ok(())
+                } else {
+                    Err("Invalid use of add command")
+                }
             },
             HighLevelMessage::Remove(vars) => {
-                model.output = model.output.replace(vars.join(" ").as_str(),"");
+                let task = vars[..vars.len()].join(" ");
+                let result = model.tasks.remove(&task);
+                match result {
+                    Some(key) => Ok(()),
+                    _ => Err("Key not found")
+                }
             },
             HighLevelMessage::Complete(vars) => {
-                model.output = model.output.replace(vars.join(" ").as_str(), format!("{} {}",vars.join(" ").as_str(),"✔").as_str());
+                let marked = vars[..vars.len()].join(" "); 
+                if model.tasks.contains_key(&marked){
+                    let mut tmp = model.tasks.get(&marked).unwrap().clone();
+
+                    if tmp.1 {
+                        Err("Task already completed")
+                    } else {
+                        tmp.1 = true;
+                        model.tasks.insert(marked.clone(),tmp);
+                        Ok(())
+                    }
+                } else {
+                    Err("Cannot mark nonexistent task as complete")
+                }
             }
-            _ => {},
-        };
+            _ => Err("Not implemented yet"),
+        }
     }
 }

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io;
 mod messages;
 use crate::messages::{LowLevelMessage, HighLevelMessage};
@@ -7,7 +8,11 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     buffer::Buffer, layout::{Alignment, Constraint, Direction, Layout, Rect}, style::Stylize, symbols::border, text::{Line, Text}, widgets::{Block, Paragraph, Widget}, DefaultTerminal, Frame
 };
-
+// TODO
+// Implement file saving and loading
+// Implement Graph/Chart visualizations
+// Make it prettier
+// Error popups
 fn main() -> io::Result<()> {
     let mut terminal = ratatui::init();
     let app_result = Model::default().run(&mut terminal);
@@ -18,7 +23,9 @@ fn main() -> io::Result<()> {
 #[derive(Debug, Default)]
 pub struct Model {
     output: String,
+    tasks: HashMap<String,(u8,bool)>,
     input: String,
+    error: String,
     exit: bool,
 }
 
@@ -107,7 +114,7 @@ impl Model {
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> Option<LowLevelMessage> {
         match key_event.code {
-            KeyCode::Char('q') => Some(LowLevelMessage::Quit),
+            KeyCode::Esc => Some(LowLevelMessage::Quit),
             KeyCode::Char(c) => Some(LowLevelMessage::Char(c)),
             KeyCode::Backspace => Some(LowLevelMessage::Delete),
             KeyCode::Enter => Some(LowLevelMessage::Push),
@@ -140,10 +147,25 @@ impl Model {
     fn push_msg(&mut self) {
         // Replace with a high-level message processor
         let msg = HighLevelMessage::parse(self.input.clone());
-        match msg{
-            Some(true_msg) => true_msg.execute(self),
-            _ => {},
-        };
-        self.input.clear();
+        if let Some(true_msg) = msg {
+            let res = true_msg.execute(self);
+            self.output.clear();
+            for key in self.tasks.keys() {
+                let inside = self.tasks.get(key).unwrap();
+                if inside.1 {
+                    self.output.push_str(format!("{key} for {} points 😁\n",inside.0).as_str())
+                } else {
+                    self.output.push_str(format!("{key} for {} points 😢\n",inside.0).as_str())
+                }
+            }
+            self.input.clear();
+            
+            match res {
+                Ok(_) => self.error=String::new(),
+                Err(e) => self.error = String::from(e),
+            }
+        } else {
+            self.error = String::from("Invalid Command");
+        }
     }
 }
