@@ -4,3 +4,5 @@ pub enum Messages {
     Decrement,
     Quit,
 }
+
+// Implement parsing of commands
